@@ -4,61 +4,61 @@ declare(strict_types=1);
 
 namespace DeathNPC;
 
-use pocketmine\Player;
 use pocketmine\nbt\tag\{
-	CompoundTag, ListTag, DoubleTag, FloatTag
+    CompoundTag, ListTag, DoubleTag, FloatTag
 };
 use pocketmine\entity\Entity;
 use pocketmine\plugin\PluginBase;
-use pocketmine\event\entity\{
-	EntityDamageEvent, EntityDamageByEntityEvent
-};
+use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\player\PlayerDeathEvent;
 use pocketmine\event\Listener;
 use pocketmine\math\Vector3;
-use pocketmine\utils\TextFormat as C;
-
-use DeathNPC\entity\NPCEntity;
 
 class Main extends PluginBase implements Listener{
 
-	public function onEnable(): void{
-		Entity::registerEntity(NPCEntity::class, true);
-		$this->getServer()->getPluginManager()->registerEvents($this, $this);
-	}
+    public function onEnable() : void{
+        Entity::registerEntity(DeathNPCEntity::class, true);
+        $this->getServer()->getPluginManager()->registerEvents($this, $this);
+    }
 
-	public function onDeath(PlayerDeathEvent $e): void{
-		$player= $e->getPlayer();
+    /**
+     * @param PlayerDeathEvent $event
+     * @return void
+     */
+    public function onDeath(PlayerDeathEvent $event) : void{
+        $player = $event->getPlayer();
+        $nbt = new CompoundTag("", [
+            new ListTag("Pos", [
+                new DoubleTag("", $player->getX()),
+                new DoubleTag("", $player->getY() - 1),
+                new DoubleTag("", $player->getZ())
+            ]),
+            new ListTag("Motion", [
+                new DoubleTag("", 0),
+                new DoubleTag("", 0),
+                new DoubleTag("", 0)
+            ]),
+            new ListTag("Rotation", [
+                new FloatTag("", 2),
+                new FloatTag("", 2)
+            ])
+        ]);
+        $nbt->setTag($player->namedtag->getTag("Skin"));
+        $npc = new DeathNPCEntity($player->getLevel(), $nbt);
+        $npc->getDataPropertyManager()->setBlockPos(DeathNPCEntity::DATA_PLAYER_BED_POSITION, new Vector3($player->getX(), $player->getY(), $player->getZ()));
+        $npc->setPlayerFlag(DeathNPCEntity::DATA_PLAYER_FLAG_SLEEP, true);
+        $npc->setNameTag("RIP " . $player->getName() . " died here");
+        $npc->setNameTagAlwaysVisible(false);
+        $npc->spawnToAll();
+        $this->getServer()->getScheduler()->scheduleDelayedTask(new DeathNPCClearTask($this, $npc, $player), 3600);
+    }
 
-		$nbt = new CompoundTag("", [
-			new ListTag("Pos", [
-				new DoubleTag("", $player->getX()),
-				new DoubleTag("", $player->getY() - 0.5),
-				new DoubleTag("", $player->getZ())
-			]),
-			new ListTag("Motion", [
-				new DoubleTag("", 0),
-				new DoubleTag("", 0),
-				new DoubleTag("", 0)
-			]),
-			new ListTag("Rotation", [
-				new FloatTag("", 2),
-				new FloatTag("", 2)
-			])
-		]);
-		$nbt->setTag($player->namedtag->getTag("Skin"));
-
-		$npc = new NPCEntity($player->getLevel(), $nbt);
-		$npc->getDataPropertyManager()->setBlockPos(NPCEntity::DATA_PLAYER_BED_POSITION, new Vector3($player->getX(), $player->getY(), $player->getZ()));
-		$npc->setPlayerFlag(NPCEntity::DATA_PLAYER_FLAG_SLEEP, true);
-		$npc->spawnTo($player);
-	}
-
-	public function onDamage(EntityDamageEvent $e): void{
-		$entity = $e->getEntity();
-
-		if($entity instanceof NPCEntity){
-			$e->setCancelled();
-		}
-	}
+    /**
+     * @param EntityDamageEvent $event
+     * @return void
+     */
+    public function onDamage(EntityDamageEvent $event) : void{
+        $entity = $event->getEntity();
+        if($entity instanceof DeathNPCEntity) $event->setCancelled(true);
+    }
 }
